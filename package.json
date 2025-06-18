@@ -1,15 +1,11 @@
 {
   "name": "hs-react-native-custom-markdown",
-  "version": "0.0.1",
+  "version": "0.0.2",
+  "description": "A React Native component to render custom markdown content.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "react-native": "dist/index.js",
   "private": false,
-  "description": "A React Native component to render custom markdown content.",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/HerikaAFIDigital/custom-markdown-converter.git"
-  },
   "author": "Herika Sethi",
   "license": "MIT",
   "keywords": [
@@ -18,6 +14,10 @@
     "custom-markdown",
     "markdown-renderer"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HerikaAFIDigital/custom-markdown-converter.git"
+  },
   "files": [
     "dist",
     "README.md"
@@ -30,12 +30,13 @@
     "start": "react-native start",
     "test": "jest"
   },
-  "dependencies": {
-    "react": "19.1.0",
-    "react-native": "0.80.0",
-    "@react-native/new-app-screen": "0.80.0"
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*"
   },
   "devDependencies": {
+    "react": "19.1.0",
+    "react-native": "0.80.0",
     "@babel/core": "^7.25.2",
     "@babel/preset-env": "^7.25.3",
     "@babel/runtime": "^7.25.0",
