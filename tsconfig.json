@@ -1,3 +1,17 @@
 {
-  "extends": "@react-native/typescript-config"
+  "compilerOptions": {
+    "target": "ES2017",
+    "module": "CommonJS",
+    "jsx": "react-native",
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "moduleResolution": "node",
+    "strict": true,
+    "skipLibCheck": true
+  },
+  "include": ["src", "index.ts"],
+  "exclude": ["node_modules", "dist", "**/__tests__/**"]
 }
