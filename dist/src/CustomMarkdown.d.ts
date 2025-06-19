@@ -1,7 +1,9 @@
 import React from 'react';
+import { StyleProp, TextStyle, ViewStyle, ImageStyle } from 'react-native';
+type MarkdownStyle = StyleProp<TextStyle | ViewStyle | ImageStyle>;
 type CustomMarkdownProps = {
     content: string;
-    styles?: Partial<typeof defaultStyles>;
+    styles?: Partial<Record<keyof typeof defaultStyles, MarkdownStyle>>;
     resolveImageSource?: (path: string) => any;
 };
 declare const CustomMarkdown: React.FC<CustomMarkdownProps>;

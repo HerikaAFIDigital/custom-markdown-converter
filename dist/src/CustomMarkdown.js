@@ -6,12 +6,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const react_1 = __importDefault(require("react"));
 const react_native_1 = require("react-native");
 const CustomMarkdown = ({ content, styles = {}, resolveImageSource, }) => {
-    const mergedStyles = Object.assign(Object.assign({}, defaultStyles), styles);
+    const getMergedStyle = (key) => {
+        return [defaultStyles[key], styles[key]];
+    };
     const parseInlineMarkdown = (text) => {
         const elements = [];
         let remaining = text;
         let index = 0;
-        const applyRegex = (regex, style, isLink = false, isCode = false, isHtmlTag = false, renderText) => {
+        const applyRegex = (regex, styleKey, isLink = false, isCode = false, isHtmlTag = false, renderText) => {
             const match = regex.exec(remaining);
             if (match) {
                 const [full, inner, link] = match;
@@ -20,17 +22,17 @@ const CustomMarkdown = ({ content, styles = {}, resolveImageSource, }) => {
                 if (before)
                     elements.push(before);
                 if (isLink) {
-                    elements.push(<react_native_1.Text key={`link-${index++}`} style={style} onPress={() => react_native_1.Linking.openURL(link)}>
+                    elements.push(<react_native_1.Text key={`link-${index++}`} style={getMergedStyle(styleKey)} onPress={() => react_native_1.Linking.openURL(link)}>
               {inner}
             </react_native_1.Text>);
                 }
                 else if (isHtmlTag && renderText) {
-                    elements.push(<react_native_1.Text key={`html-${index++}`} style={style}>
+                    elements.push(<react_native_1.Text key={`html-${index++}`} style={getMergedStyle(styleKey)}>
               {renderText(inner)}
             </react_native_1.Text>);
                 }
                 else {
-                    elements.push(<react_native_1.Text key={`styled-${index++}`} style={style}>
+                    elements.push(<react_native_1.Text key={`styled-${index++}`} style={getMergedStyle(styleKey)}>
               {inner}
             </react_native_1.Text>);
                 }
@@ -41,19 +43,24 @@ const CustomMarkdown = ({ content, styles = {}, resolveImageSource, }) => {
         };
         while (remaining.length) {
             const patterns = [
-                { regex: /\*\*\*(.*?)\*\*\*/g, style: [mergedStyles.bold, mergedStyles.italic] },
-                { regex: /\*\*(.*?)\*\*/g, style: mergedStyles.bold },
-                { regex: /_(.*?)_/g, style: mergedStyles.italic },
-                { regex: /`([^`]+)`/g, style: mergedStyles.code, isCode: true },
-                { regex: /\[(.*?)\]\((.*?)\)/g, style: mergedStyles.link, isLink: true },
-                { regex: /<b>(.*?)<\/b>/i, style: mergedStyles.bold, isHtmlTag: true },
-                { regex: /<i>(.*?)<\/i>/i, style: mergedStyles.italic, isHtmlTag: true },
-                { regex: /<u>(.*?)<\/u>/i, style: mergedStyles.underline, isHtmlTag: true },
-                { regex: /<br\s*\/?>/i, style: mergedStyles.paragraph, isHtmlTag: true, renderText: () => '\n' },
+                { regex: /\*\*\*(.*?)\*\*\*/g, style: ['bold', 'italic'] },
+                { regex: /\*\*(.*?)\*\*/g, style: ['bold'] },
+                { regex: /_(.*?)_/g, style: ['italic'] },
+                { regex: /`([^`]+)`/g, style: ['code'], isCode: true },
+                { regex: /\[(.*?)\]\((.*?)\)/g, style: ['link'], isLink: true },
+                { regex: /<b>(.*?)<\/b>/i, style: ['bold'], isHtmlTag: true },
+                { regex: /<i>(.*?)<\/i>/i, style: ['italic'], isHtmlTag: true },
+                { regex: /<u>(.*?)<\/u>/i, style: ['underline'], isHtmlTag: true },
+                {
+                    regex: /<br\s*\/?>/i,
+                    style: ['paragraph'],
+                    isHtmlTag: true,
+                    renderText: () => '\n',
+                },
             ];
             let matched = false;
             for (const pattern of patterns) {
-                if (applyRegex(pattern.regex, pattern.style, pattern.isLink, pattern.isCode, pattern.isHtmlTag, pattern.renderText)) {
+                if (applyRegex(pattern.regex, pattern.style[0], pattern.isLink, pattern.isCode, pattern.isHtmlTag, pattern.renderText)) {
                     matched = true;
                     break;
                 }
@@ -74,8 +81,8 @@ const CustomMarkdown = ({ content, styles = {}, resolveImageSource, }) => {
             if (line.trim() === '```') {
                 inCodeBlock = !inCodeBlock;
                 if (!inCodeBlock) {
-                    result.push(<react_native_1.View key={`code-${index}`} style={mergedStyles.codeBlock}>
-              <react_native_1.Text style={mergedStyles.code}>
+                    result.push(<react_native_1.View key={`code-${index}`} style={getMergedStyle('codeBlock')}>
+              <react_native_1.Text style={getMergedStyle('code')}>
                 {codeBlockContent.join('\n')}
               </react_native_1.Text>
             </react_native_1.View>);
@@ -87,64 +94,55 @@ const CustomMarkdown = ({ content, styles = {}, resolveImageSource, }) => {
                 codeBlockContent.push(line);
                 return;
             }
-            // Image
             const imgMatch = line.match(/!\[(.*?)\]\((.*?)\)/);
             if (imgMatch) {
                 const altText = imgMatch[1];
                 const imgPath = imgMatch[2];
-                let source;
-                if (resolveImageSource) {
-                    source = resolveImageSource(imgPath);
-                }
-                else {
-                    source = { uri: imgPath }; // fallback: remote URL
-                }
-                result.push(<react_native_1.Image key={`img-${index}`} source={source} style={mergedStyles.image} accessibilityLabel={altText}/>);
+                const source = resolveImageSource
+                    ? resolveImageSource(imgPath)
+                    : { uri: imgPath };
+                result.push(<react_native_1.Image key={`img-${index}`} source={source} style={getMergedStyle('image')} accessibilityLabel={altText}/>);
                 return;
             }
-            // Heading
             const headingMatch = line.match(/^(#{1,6})\s+(.*)/);
             if (headingMatch) {
                 const level = headingMatch[1].length;
                 const headingText = headingMatch[2];
                 const styleKey = `heading${level}`;
-                result.push(<react_native_1.Text key={`heading-${index}`} style={mergedStyles[styleKey]}>
+                result.push(<react_native_1.Text key={`heading-${index}`} style={getMergedStyle(styleKey)}>
             {headingText}
           </react_native_1.Text>);
                 return;
             }
-            // Blockquote
             if (line.startsWith('>')) {
-                result.push(<react_native_1.View key={`quote-${index}`} style={mergedStyles.blockquoteContainer}>
-            <react_native_1.Text style={mergedStyles.blockquoteText}>
+                result.push(<react_native_1.View key={`quote-${index}`} style={getMergedStyle('blockquoteContainer')}>
+            <react_native_1.Text style={getMergedStyle('blockquoteText')}>
               {line.replace(/^>\s?/, '')}
             </react_native_1.Text>
           </react_native_1.View>);
                 return;
             }
-            // Bullet list
             if (line.trim().startsWith('- ')) {
-                result.push(<react_native_1.View key={`list-${index}`} style={mergedStyles.bulletRow}>
-            <react_native_1.Text style={mergedStyles.bullet}>{'\u2022'}</react_native_1.Text>
-            <react_native_1.Text style={mergedStyles.listText}>
+                result.push(<react_native_1.View key={`list-${index}`} style={getMergedStyle('bulletRow')}>
+            <react_native_1.Text style={getMergedStyle('bullet')}>{'\u2022'}</react_native_1.Text>
+            <react_native_1.Text style={getMergedStyle('listText')}>
               {parseInlineMarkdown(line.replace('- ', ''))}
             </react_native_1.Text>
           </react_native_1.View>);
                 return;
             }
-            // Numbered list
             const numberedMatch = line.trim().match(/^(\d+)\.\s+(.*)/);
             if (numberedMatch) {
-                result.push(<react_native_1.View key={`list-num-${index}`} style={mergedStyles.bulletRow}>
-            <react_native_1.Text style={mergedStyles.bullet}>{numberedMatch[1] + '.'}</react_native_1.Text>
-            <react_native_1.Text style={mergedStyles.listText}>
+                result.push(<react_native_1.View key={`list-num-${index}`} style={getMergedStyle('bulletRow')}>
+            <react_native_1.Text style={getMergedStyle('bullet')}>{numberedMatch[1] + '.'}</react_native_1.Text>
+            <react_native_1.Text style={getMergedStyle('listText')}>
               {parseInlineMarkdown(numberedMatch[2])}
             </react_native_1.Text>
           </react_native_1.View>);
                 return;
             }
             if (line.trim()) {
-                result.push(<react_native_1.Text key={`text-${index}`} style={mergedStyles.paragraph}>
+                result.push(<react_native_1.Text key={`text-${index}`} style={getMergedStyle('paragraph')}>
             {parseInlineMarkdown(line)}
           </react_native_1.Text>);
             }
