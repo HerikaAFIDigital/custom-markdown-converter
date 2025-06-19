@@ -5,7 +5,7 @@ A lightweight React Native component to render custom markdown content, includin
 ## ✨ Features
 
 - Parses and renders markdown content
-- Supports custom image resolution logic
+- Supports custom image resolution logic 
 - Optimized for React Native apps
 - Written in TypeScript
 

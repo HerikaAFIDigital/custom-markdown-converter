@@ -5,11 +5,17 @@ import {
   Image,
   StyleSheet,
   Linking,
+  StyleProp,
+  TextStyle,
+  ViewStyle,
+  ImageStyle,
 } from 'react-native';
+
+type MarkdownStyle = StyleProp<TextStyle | ViewStyle | ImageStyle>;
 
 type CustomMarkdownProps = {
   content: string;
-  styles?: Partial<typeof defaultStyles>;
+  styles?: Partial<Record<keyof typeof defaultStyles, MarkdownStyle>>;
   resolveImageSource?: (path: string) => any;
 };
 
@@ -18,7 +24,9 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
   styles = {},
   resolveImageSource,
 }) => {
-  const mergedStyles = { ...defaultStyles, ...styles };
+  const getMergedStyle = (key: keyof typeof defaultStyles): MarkdownStyle => {
+    return [defaultStyles[key], styles[key]];
+  };
 
   const parseInlineMarkdown = (text: string) => {
     const elements: (JSX.Element | string)[] = [];
@@ -27,7 +35,7 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
 
     const applyRegex = (
       regex: RegExp,
-      style: any,
+      styleKey: keyof typeof defaultStyles,
       isLink = false,
       isCode = false,
       isHtmlTag = false,
@@ -44,20 +52,20 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
           elements.push(
             <Text
               key={`link-${index++}`}
-              style={style}
+              style={getMergedStyle(styleKey)}
               onPress={() => Linking.openURL(link)}>
               {inner}
             </Text>
           );
         } else if (isHtmlTag && renderText) {
           elements.push(
-            <Text key={`html-${index++}`} style={style}>
+            <Text key={`html-${index++}`} style={getMergedStyle(styleKey)}>
               {renderText(inner)}
             </Text>
           );
         } else {
           elements.push(
-            <Text key={`styled-${index++}`} style={style}>
+            <Text key={`styled-${index++}`} style={getMergedStyle(styleKey)}>
               {inner}
             </Text>
           );
@@ -71,15 +79,20 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
 
     while (remaining.length) {
       const patterns = [
-        { regex: /\*\*\*(.*?)\*\*\*/g, style: [mergedStyles.bold, mergedStyles.italic] },
-        { regex: /\*\*(.*?)\*\*/g, style: mergedStyles.bold },
-        { regex: /_(.*?)_/g, style: mergedStyles.italic },
-        { regex: /`([^`]+)`/g, style: mergedStyles.code, isCode: true },
-        { regex: /\[(.*?)\]\((.*?)\)/g, style: mergedStyles.link, isLink: true },
-        { regex: /<b>(.*?)<\/b>/i, style: mergedStyles.bold, isHtmlTag: true },
-        { regex: /<i>(.*?)<\/i>/i, style: mergedStyles.italic, isHtmlTag: true },
-        { regex: /<u>(.*?)<\/u>/i, style: mergedStyles.underline, isHtmlTag: true },
-        { regex: /<br\s*\/?>/i, style: mergedStyles.paragraph, isHtmlTag: true, renderText: () => '\n' },
+        { regex: /\*\*\*(.*?)\*\*\*/g, style: ['bold', 'italic'] },
+        { regex: /\*\*(.*?)\*\*/g, style: ['bold'] },
+        { regex: /_(.*?)_/g, style: ['italic'] },
+        { regex: /`([^`]+)`/g, style: ['code'], isCode: true },
+        { regex: /\[(.*?)\]\((.*?)\)/g, style: ['link'], isLink: true },
+        { regex: /<b>(.*?)<\/b>/i, style: ['bold'], isHtmlTag: true },
+        { regex: /<i>(.*?)<\/i>/i, style: ['italic'], isHtmlTag: true },
+        { regex: /<u>(.*?)<\/u>/i, style: ['underline'], isHtmlTag: true },
+        {
+          regex: /<br\s*\/?>/i,
+          style: ['paragraph'],
+          isHtmlTag: true,
+          renderText: () => '\n',
+        },
       ];
 
       let matched = false;
@@ -87,7 +100,7 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
         if (
           applyRegex(
             pattern.regex,
-            pattern.style,
+            pattern.style[0] as keyof typeof defaultStyles,
             pattern.isLink,
             pattern.isCode,
             pattern.isHtmlTag,
@@ -119,8 +132,8 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
         inCodeBlock = !inCodeBlock;
         if (!inCodeBlock) {
           result.push(
-            <View key={`code-${index}`} style={mergedStyles.codeBlock}>
-              <Text style={mergedStyles.code}>
+            <View key={`code-${index}`} style={getMergedStyle('codeBlock')}>
+              <Text style={getMergedStyle('code')}>
                 {codeBlockContent.join('\n')}
               </Text>
             </View>
@@ -135,49 +148,42 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
         return;
       }
 
-      // Image
       const imgMatch = line.match(/!\[(.*?)\]\((.*?)\)/);
       if (imgMatch) {
         const altText = imgMatch[1];
         const imgPath = imgMatch[2];
-        let source;
-
-        if (resolveImageSource) {
-          source = resolveImageSource(imgPath);
-        } else {
-          source = { uri: imgPath }; // fallback: remote URL
-        }
+        const source = resolveImageSource
+          ? resolveImageSource(imgPath)
+          : { uri: imgPath };
 
         result.push(
           <Image
             key={`img-${index}`}
             source={source}
-            style={mergedStyles.image}
+            style={getMergedStyle('image') as StyleProp<ImageStyle>}
             accessibilityLabel={altText}
           />
         );
         return;
       }
 
-      // Heading
       const headingMatch = line.match(/^(#{1,6})\s+(.*)/);
       if (headingMatch) {
         const level = headingMatch[1].length;
         const headingText = headingMatch[2];
         const styleKey = `heading${level}` as keyof typeof defaultStyles;
         result.push(
-          <Text key={`heading-${index}`} style={mergedStyles[styleKey]}>
+          <Text key={`heading-${index}`} style={getMergedStyle(styleKey)}>
             {headingText}
           </Text>
         );
         return;
       }
 
-      // Blockquote
       if (line.startsWith('>')) {
         result.push(
-          <View key={`quote-${index}`} style={mergedStyles.blockquoteContainer}>
-            <Text style={mergedStyles.blockquoteText}>
+          <View key={`quote-${index}`} style={getMergedStyle('blockquoteContainer')}>
+            <Text style={getMergedStyle('blockquoteText')}>
               {line.replace(/^>\s?/, '')}
             </Text>
           </View>
@@ -185,12 +191,11 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
         return;
       }
 
-      // Bullet list
       if (line.trim().startsWith('- ')) {
         result.push(
-          <View key={`list-${index}`} style={mergedStyles.bulletRow}>
-            <Text style={mergedStyles.bullet}>{'\u2022'}</Text>
-            <Text style={mergedStyles.listText}>
+          <View key={`list-${index}`} style={getMergedStyle('bulletRow')}>
+            <Text style={getMergedStyle('bullet')}>{'\u2022'}</Text>
+            <Text style={getMergedStyle('listText')}>
               {parseInlineMarkdown(line.replace('- ', ''))}
             </Text>
           </View>
@@ -198,13 +203,12 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
         return;
       }
 
-      // Numbered list
       const numberedMatch = line.trim().match(/^(\d+)\.\s+(.*)/);
       if (numberedMatch) {
         result.push(
-          <View key={`list-num-${index}`} style={mergedStyles.bulletRow}>
-            <Text style={mergedStyles.bullet}>{numberedMatch[1] + '.'}</Text>
-            <Text style={mergedStyles.listText}>
+          <View key={`list-num-${index}`} style={getMergedStyle('bulletRow')}>
+            <Text style={getMergedStyle('bullet')}>{numberedMatch[1] + '.'}</Text>
+            <Text style={getMergedStyle('listText')}>
               {parseInlineMarkdown(numberedMatch[2])}
             </Text>
           </View>
@@ -214,7 +218,7 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
 
       if (line.trim()) {
         result.push(
-          <Text key={`text-${index}`} style={mergedStyles.paragraph}>
+          <Text key={`text-${index}`} style={getMergedStyle('paragraph')}>
             {parseInlineMarkdown(line)}
           </Text>
         );
