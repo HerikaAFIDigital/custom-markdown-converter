@@ -150,9 +150,8 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
       }
 
       const colorMatch = line.match(
-        /^:::\{\s*\.color-([#a-zA-Z0-9(),.\s]+)\s*\}(.*):::/,
+        /^:::\{\s*\.color-([a-zA-Z]+)\s*\}(.*?):::\s*$/,
       );
-
       if (colorMatch) {
         const [, colorName, text] = colorMatch;
         const colorStyle = { color: colorName.toLowerCase() };
