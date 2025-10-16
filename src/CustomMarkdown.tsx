@@ -123,119 +123,127 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
   // };
 
   const parseInlineMarkdown = (text: string) => {
-  const elements: (JSX.Element | string)[] = [];
-  let remaining = text;
-  let index = 0;
+    const elements: (JSX.Element | string)[] = [];
+    let remaining = text;
+    let index = 0;
 
-  const applyRegex = (
-    regex: RegExp,
-    styleKey: keyof typeof defaultStyles,
-    isLink = false,
-    isCode = false,
-    isHtmlTag = false,
-    isColor = false,
-    renderText?: (value: string, match?: RegExpExecArray) => string | JSX.Element,
-  ) => {
-    const match = regex.exec(remaining);
-    if (match) {
-      const [full, inner, inner2] = match;
-      const before = remaining.substring(0, match.index);
-      const after = remaining.substring(match.index + full.length);
-      if (before) elements.push(before);
+    const applyRegex = (
+      regex: RegExp,
+      styleKey: keyof typeof defaultStyles,
+      isLink = false,
+      isCode = false,
+      isHtmlTag = false,
+      isColor = false,
+      renderText?: (
+        value: string,
+        match?: RegExpExecArray,
+      ) => string | JSX.Element,
+    ) => {
+      const match = regex.exec(remaining);
+      if (match) {
+        const [full, inner, inner2] = match;
+        const before = remaining.substring(0, match.index);
+        const after = remaining.substring(match.index + full.length);
+        if (before) elements.push(before);
 
-      if (isLink) {
-        elements.push(
-          <Text
-            key={`link-${index++}`}
-            style={getMergedStyle(styleKey)}
-            onPress={() => Linking.openURL(inner2)}
-          >
-            {inner}
-          </Text>,
-        );
-      } else if (isColor) {
-        // Handle color syntax :::{.color-blue}text:::
-        const colorName = inner;
-        const coloredText = inner2;
-        elements.push(
-          <Text 
-            key={`color-${index++}`} 
-            style={{ color: colorName.toLowerCase() }}
-          >
-            {parseInlineMarkdown(coloredText)}
-          </Text>,
-        );
-      } else if (isHtmlTag && renderText) {
-        const rendered = renderText(inner, match);
-        if (typeof rendered === 'string') {
-          elements.push(rendered);
+        if (isLink) {
+          elements.push(
+            <Text
+              key={`link-${index++}`}
+              style={getMergedStyle(styleKey)}
+              onPress={() => Linking.openURL(inner2)}
+            >
+              {inner}
+            </Text>,
+          );
+        } else if (isColor) {
+          // Handle color syntax :::{.color-blue}text:::
+          const colorName = inner;
+          const coloredText = inner2;
+
+          console.log('DEBUG - Color processing:');
+          console.log('Color:', colorName);
+          console.log('Text:', coloredText);
+
+          elements.push(
+            <Text
+              key={`color-${index++}`}
+              style={{ color: colorName.toLowerCase() }}
+            >
+              {parseInlineMarkdown(coloredText)}
+            </Text>,
+          );
+        } else if (isHtmlTag && renderText) {
+          const rendered = renderText(inner, match);
+          if (typeof rendered === 'string') {
+            elements.push(rendered);
+          } else {
+            elements.push(rendered);
+          }
         } else {
-          elements.push(rendered);
+          elements.push(
+            <Text key={`styled-${index++}`} style={getMergedStyle(styleKey)}>
+              {inner}
+            </Text>,
+          );
         }
-      } else {
-        elements.push(
-          <Text key={`styled-${index++}`} style={getMergedStyle(styleKey)}>
-            {inner}
-          </Text>,
-        );
+
+        remaining = after;
+        return true;
+      }
+      return false;
+    };
+
+    while (remaining.length) {
+      const patterns = [
+        // Try this SIMPLER color pattern first
+        {
+          regex: /:::{\s*\.color-([a-zA-Z]+)\s*}(.*?):::/g,
+          style: ['paragraph'],
+          isColor: true,
+        },
+        { regex: /\*\*\*(.*?)\*\*\*/g, style: ['bold', 'italic'] },
+        { regex: /\*\*(.*?)\*\*/g, style: ['bold'] },
+        { regex: /_(.*?)_/g, style: ['italic'] },
+        { regex: /`([^`]+)`/g, style: ['code'], isCode: true },
+        { regex: /\[(.*?)\]\((.*?)\)/g, style: ['link'], isLink: true },
+        { regex: /<b>(.*?)<\/b>/i, style: ['bold'], isHtmlTag: true },
+        { regex: /<i>(.*?)<\/i>/i, style: ['italic'], isHtmlTag: true },
+        { regex: /<u>(.*?)<\/u>/i, style: ['underline'], isHtmlTag: true },
+        {
+          regex: /<br\s*\/?>/i,
+          style: ['paragraph'],
+          isHtmlTag: true,
+          renderText: () => '\n',
+        },
+      ];
+
+      let matched = false;
+      for (const pattern of patterns) {
+        if (
+          applyRegex(
+            pattern.regex,
+            pattern.style[0] as keyof typeof defaultStyles,
+            pattern.isLink,
+            pattern.isCode,
+            pattern.isHtmlTag,
+            pattern.isColor,
+            pattern.renderText,
+          )
+        ) {
+          matched = true;
+          break;
+        }
       }
 
-      remaining = after;
-      return true;
-    }
-    return false;
-  };
-
-  while (remaining.length) {
-    const patterns = [
-      // Add color pattern FIRST (it should have highest priority)
-      { 
-        regex: /:::\{\s*\.color-([a-zA-Z]+)\s*\}(.*?):::/g, 
-        style: ['paragraph'], 
-        isColor: true 
-      },
-      { regex: /\*\*\*(.*?)\*\*\*/g, style: ['bold', 'italic'] },
-      { regex: /\*\*(.*?)\*\*/g, style: ['bold'] },
-      { regex: /_(.*?)_/g, style: ['italic'] },
-      { regex: /`([^`]+)`/g, style: ['code'], isCode: true },
-      { regex: /\[(.*?)\]\((.*?)\)/g, style: ['link'], isLink: true },
-      { regex: /<b>(.*?)<\/b>/i, style: ['bold'], isHtmlTag: true },
-      { regex: /<i>(.*?)<\/i>/i, style: ['italic'], isHtmlTag: true },
-      { regex: /<u>(.*?)<\/u>/i, style: ['underline'], isHtmlTag: true },
-      {
-        regex: /<br\s*\/?>/i,
-        style: ['paragraph'],
-        isHtmlTag: true,
-        renderText: () => '\n',
-      },
-    ];
-
-    let matched = false;
-    for (const pattern of patterns) {
-      if (
-        applyRegex(
-          pattern.regex,
-          pattern.style[0] as keyof typeof defaultStyles,
-          pattern.isLink,
-          pattern.isCode,
-          pattern.isHtmlTag,
-          pattern.isColor, // NEW parameter
-          pattern.renderText,
-        )
-      ) {
-        matched = true;
+      if (!matched) {
+        elements.push(remaining);
         break;
       }
     }
 
-    if (!matched) {
-      elements.push(remaining);
-      break;
-    }
-  }
-
-  return <Text>{elements}</Text>;
-};
+    return <Text>{elements}</Text>;
+  };
   const renderMarkdown = () => {
     const lines = content.split('\n');
     const result: JSX.Element[] = [];
@@ -262,7 +270,6 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
         codeBlockContent.push(line);
         return;
       }
-
 
       const imgMatch = line.match(/!\[(.*?)\]\((.*?)\)/);
       if (imgMatch) {
