@@ -149,6 +149,24 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
         return;
       }
 
+      const colorMatch = line.match(
+        /^:::\{\s*\.color-([#a-zA-Z0-9(),.\s]+)\s*\}(.*):::/,
+      );
+
+      if (colorMatch) {
+        const [, colorName, text] = colorMatch;
+        const colorStyle = { color: colorName.toLowerCase() };
+        result.push(
+          <Text
+            key={`color-${index}`}
+            style={[getMergedStyle('paragraph'), colorStyle]}
+          >
+            {parseInlineMarkdown(text.trim())}
+          </Text>,
+        );
+        return;
+      }
+
       const imgMatch = line.match(/!\[(.*?)\]\((.*?)\)/);
       if (imgMatch) {
         const altText = imgMatch[1];
@@ -228,22 +246,6 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
             {parseInlineMarkdown(line)}
           </Text>,
         );
-      }
-
-      
-      const colorMatch = line.match(/^:::\{\s*\.color-([a-zA-Z]+)\s*\}(.*)/);
-      if (colorMatch) {
-        const [, colorName, text] = colorMatch;
-        const colorStyle = { color: colorName.toLowerCase() };
-        result.push(
-          <Text
-            key={`color-${index}`}
-            style={[getMergedStyle('paragraph'), colorStyle]}
-          >
-            {parseInlineMarkdown(text.trim())}
-          </Text>,
-        );
-        return;
       }
     });
 
