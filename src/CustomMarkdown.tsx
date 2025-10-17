@@ -716,7 +716,7 @@ type CustomMarkdownProps = {
   resolveImageSource?: (path: string) => any;
 };
 
-// Color mapping
+// Color mapping (optional fallback)
 const COLOR_MAP: Record<string, string> = {
   blue: '#007AFF',
   red: '#FF3B30',
@@ -776,18 +776,13 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
             </Text>,
           );
         } else if (isColor) {
-          // inner = color, inner2 = text
-          const colorName = (inner || '').trim();
-          const coloredText = (inner2 || '').trim();
-          const colorValue = COLOR_MAP[colorName.toLowerCase()] || '#000000';
-
-          if (coloredText.length > 0) {
-            elements.push(
-              <Text key={`color-${index++}`} style={{ color: colorValue }}>
-                {parseInlineMarkdown(coloredText)}
-              </Text>,
-            );
-          }
+          const colorValue = inner; // inner = hex code
+          const coloredText = inner2; // inner2 = text
+          elements.push(
+            <Text key={`color-${index++}`} style={{ color: colorValue }}>
+              {parseInlineMarkdown(coloredText)}
+            </Text>,
+          );
         } else if (isHtmlTag && renderText) {
           const rendered = renderText(inner, match);
           elements.push(rendered);
@@ -807,9 +802,9 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
 
     while (remaining.length) {
       const patterns = [
+        // Handle <color style="#xxxxxx">Text</color>
         {
-          // color syntax :::{.color-blue}Text:::
-          regex: /:::\{\.color-([a-zA-Z]+)\}(.*?):::/,
+          regex: /<color style="(#[0-9A-Fa-f]{6})">(.*?)<\/color>/,
           style: ['paragraph'],
           isColor: true,
         },
