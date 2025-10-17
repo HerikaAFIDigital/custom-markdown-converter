@@ -123,127 +123,190 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
   // };
 
   const parseInlineMarkdown = (text: string) => {
-    const elements: (JSX.Element | string)[] = [];
-    let remaining = text;
-    let index = 0;
+  const elements: (JSX.Element | string)[] = [];
+  let remaining = text;
+  let index = 0;
 
-    const applyRegex = (
-      regex: RegExp,
-      styleKey: keyof typeof defaultStyles,
-      isLink = false,
-      isCode = false,
-      isHtmlTag = false,
-      isColor = false,
-      renderText?: (
-        value: string,
-        match?: RegExpExecArray,
-      ) => string | JSX.Element,
-    ) => {
-      const match = regex.exec(remaining);
-      if (match) {
-        const [full, inner, inner2] = match;
-        const before = remaining.substring(0, match.index);
-        const after = remaining.substring(match.index + full.length);
-        if (before) elements.push(before);
+  // Helper function to parse formatting within colored text
+  const parseFormattedText = (content: string, baseColor: string, startIdx: number) => {
+    const formattedElements: JSX.Element[] = [];
+    let formattedRemaining = content;
+    let formattedIndex = startIdx;
 
-        if (isLink) {
-          elements.push(
-            <Text
-              key={`link-${index++}`}
-              style={getMergedStyle(styleKey)}
-              onPress={() => Linking.openURL(inner2)}
-            >
-              {inner}
-            </Text>,
+    while (formattedRemaining.length > 0) {
+      // Check for bold text
+      const boldMatch = /\*\*(.*?)\*\*/g.exec(formattedRemaining);
+      if (boldMatch) {
+        const before = formattedRemaining.substring(0, boldMatch.index);
+        if (before) {
+          formattedElements.push(
+            <Text key={`text-${formattedIndex++}`} style={{ color: baseColor }}>
+              {before}
+            </Text>
           );
-        } else if (isColor) {
-          // Handle color syntax :::{.color-blue}text:::
-          const colorName = inner;
-          const coloredText = inner2;
+        }
+        
+        formattedElements.push(
+          <Text key={`bold-${formattedIndex++}`} style={{ color: baseColor, fontWeight: 'bold' }}>
+            {boldMatch[1]}
+          </Text>
+        );
+        
+        formattedRemaining = formattedRemaining.substring(boldMatch.index + boldMatch[0].length);
+        continue;
+      }
 
-          console.log('DEBUG - Color processing:');
-          console.log('Color:', colorName);
-          console.log('Text:', coloredText);
-
-          elements.push(
-            <Text
-              key={`color-${index++}`}
-              style={{ color: colorName.toLowerCase() }}
-            >
-              {parseInlineMarkdown(coloredText)}
-            </Text>,
+      // Check for italic text
+      const italicMatch = /_(.*?)_/g.exec(formattedRemaining);
+      if (italicMatch) {
+        const before = formattedRemaining.substring(0, italicMatch.index);
+        if (before) {
+          formattedElements.push(
+            <Text key={`text-${formattedIndex++}`} style={{ color: baseColor }}>
+              {before}
+            </Text>
           );
-        } else if (isHtmlTag && renderText) {
-          const rendered = renderText(inner, match);
-          if (typeof rendered === 'string') {
-            elements.push(rendered);
-          } else {
-            elements.push(rendered);
-          }
+        }
+        
+        formattedElements.push(
+          <Text key={`italic-${formattedIndex++}`} style={{ color: baseColor, fontStyle: 'italic' }}>
+            {italicMatch[1]}
+          </Text>
+        );
+        
+        formattedRemaining = formattedRemaining.substring(italicMatch.index + italicMatch[0].length);
+        continue;
+      }
+
+      // No more formatting, push remaining text
+      if (formattedRemaining) {
+        formattedElements.push(
+          <Text key={`text-${formattedIndex++}`} style={{ color: baseColor }}>
+            {formattedRemaining}
+          </Text>
+        );
+      }
+      break;
+    }
+
+    return formattedElements;
+  };
+
+  const applyRegex = (
+    regex: RegExp,
+    styleKey: keyof typeof defaultStyles,
+    isLink = false,
+    isCode = false,
+    isHtmlTag = false,
+    isColor = false,
+    renderText?: (
+      value: string,
+      match?: RegExpExecArray,
+    ) => string | JSX.Element,
+  ) => {
+    regex.lastIndex = 0;
+    const match = regex.exec(remaining);
+    if (match) {
+      const [full, inner, inner2] = match;
+      const before = remaining.substring(0, match.index);
+      const after = remaining.substring(match.index + full.length);
+      if (before) elements.push(before);
+
+      if (isLink) {
+        elements.push(
+          <Text
+            key={`link-${index++}`}
+            style={getMergedStyle(styleKey)}
+            onPress={() => Linking.openURL(inner2)}
+          >
+            {inner}
+          </Text>,
+        );
+      } else if (isColor) {
+        // Handle color syntax :::{.color-blue}text:::
+        const colorName = inner;
+        const coloredText = inner2;
+
+        console.log('DEBUG - Color processing:');
+        console.log('Color:', colorName);
+        console.log('Text:', coloredText);
+
+        // Parse formatted text within the color
+        const coloredElements = parseFormattedText(coloredText, colorName.toLowerCase(), index);
+        elements.push(...coloredElements);
+        index += coloredElements.length;
+      } else if (isHtmlTag && renderText) {
+        const rendered = renderText(inner, match);
+        if (typeof rendered === 'string') {
+          elements.push(rendered);
         } else {
-          elements.push(
-            <Text key={`styled-${index++}`} style={getMergedStyle(styleKey)}>
-              {inner}
-            </Text>,
-          );
+          elements.push(rendered);
         }
-
-        remaining = after;
-        return true;
-      }
-      return false;
-    };
-
-    while (remaining.length) {
-      const patterns = [
-        // Try this SIMPLER color pattern first
-        {
-          regex: /:::{\s*\.color-([a-zA-Z]+)\s*}(.*?):::/g,
-          style: ['paragraph'],
-          isColor: true,
-        },
-        { regex: /\*\*\*(.*?)\*\*\*/g, style: ['bold', 'italic'] },
-        { regex: /\*\*(.*?)\*\*/g, style: ['bold'] },
-        { regex: /_(.*?)_/g, style: ['italic'] },
-        { regex: /`([^`]+)`/g, style: ['code'], isCode: true },
-        { regex: /\[(.*?)\]\((.*?)\)/g, style: ['link'], isLink: true },
-        { regex: /<b>(.*?)<\/b>/i, style: ['bold'], isHtmlTag: true },
-        { regex: /<i>(.*?)<\/i>/i, style: ['italic'], isHtmlTag: true },
-        { regex: /<u>(.*?)<\/u>/i, style: ['underline'], isHtmlTag: true },
-        {
-          regex: /<br\s*\/?>/i,
-          style: ['paragraph'],
-          isHtmlTag: true,
-          renderText: () => '\n',
-        },
-      ];
-
-      let matched = false;
-      for (const pattern of patterns) {
-        if (
-          applyRegex(
-            pattern.regex,
-            pattern.style[0] as keyof typeof defaultStyles,
-            pattern.isLink,
-            pattern.isCode,
-            pattern.isHtmlTag,
-            pattern.isColor,
-            pattern.renderText,
-          )
-        ) {
-          matched = true;
-          break;
-        }
+      } else {
+        elements.push(
+          <Text key={`styled-${index++}`} style={getMergedStyle(styleKey)}>
+            {inner}
+          </Text>,
+        );
       }
 
-      if (!matched) {
-        elements.push(remaining);
+      remaining = after;
+      return true;
+    }
+    return false;
+  };
+
+  while (remaining.length) {
+    const patterns = [
+      // COLOR PATTERN FIRST
+      {
+        regex: /:::\s*{\s*\.color-([a-zA-Z]+)\s*}\s*([\s\S]*?)\s*:::/g,
+        style: ['paragraph'],
+        isColor: true,
+      },
+      { regex: /\*\*\*(.*?)\*\*\*/g, style: ['bold', 'italic'] },
+      { regex: /\*\*(.*?)\*\*/g, style: ['bold'] },
+      { regex: /_(.*?)_/g, style: ['italic'] },
+      { regex: /`([^`]+)`/g, style: ['code'], isCode: true },
+      { regex: /\[(.*?)\]\((.*?)\)/g, style: ['link'], isLink: true },
+      { regex: /<b>(.*?)<\/b>/i, style: ['bold'], isHtmlTag: true },
+      { regex: /<i>(.*?)<\/i>/i, style: ['italic'], isHtmlTag: true },
+      { regex: /<u>(.*?)<\/u>/i, style: ['underline'], isHtmlTag: true },
+      {
+        regex: /<br\s*\/?>/i,
+        style: ['paragraph'],
+        isHtmlTag: true,
+        renderText: () => '\n',
+      },
+    ];
+
+    let matched = false;
+    for (const pattern of patterns) {
+      if (
+        applyRegex(
+          pattern.regex,
+          pattern.style[0] as keyof typeof defaultStyles,
+          pattern.isLink,
+          pattern.isCode,
+          pattern.isHtmlTag,
+          pattern.isColor,
+          pattern.renderText,
+        )
+      ) {
+        matched = true;
         break;
       }
     }
 
-    return <Text>{elements}</Text>;
-  };
+    if (!matched) {
+      elements.push(remaining);
+      break;
+    }
+  }
+
+  return <Text>{elements}</Text>;
+};
+
   const renderMarkdown = () => {
     const lines = content.split('\n');
     const result: JSX.Element[] = [];
