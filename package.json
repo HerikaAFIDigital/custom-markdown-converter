@@ -1,6 +1,6 @@
 {
   "name": "hs-react-native-custom-markdown",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "description": "A React Native component to render custom markdown content.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
