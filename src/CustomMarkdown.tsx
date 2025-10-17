@@ -145,13 +145,13 @@
 //             </Text>
 //           );
 //         }
-        
+
 //         formattedElements.push(
 //           <Text key={`bold-${formattedIndex++}`} style={{ color: baseColor, fontWeight: 'bold' }}>
 //             {boldMatch[1]}
 //           </Text>
 //         );
-        
+
 //         formattedRemaining = formattedRemaining.substring(boldMatch.index + boldMatch[0].length);
 //         continue;
 //       }
@@ -167,13 +167,13 @@
 //             </Text>
 //           );
 //         }
-        
+
 //         formattedElements.push(
 //           <Text key={`italic-${formattedIndex++}`} style={{ color: baseColor, fontStyle: 'italic' }}>
 //             {italicMatch[1]}
 //           </Text>
 //         );
-        
+
 //         formattedRemaining = formattedRemaining.substring(italicMatch.index + italicMatch[0].length);
 //         continue;
 //       }
@@ -332,7 +332,7 @@ type CustomMarkdownProps = {
 // Color mapping for React Native
 const COLOR_MAP: Record<string, string> = {
   blue: '#007AFF',
-  red: '#FF3B30', 
+  red: '#FF3B30',
   green: '#34C759',
   orange: '#FF9500',
   yellow: '#FFCC00',
@@ -390,23 +390,25 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
           );
         } else if (isColor) {
           // Handle color syntax :::{.color-blue}text:::
-          const colorName = inner;
-          const coloredText = inner2;
+          const colorName = (inner || '').trim();
+          const coloredText = (inner2 || '').trim();
 
-          console.log('Color processing - Color:', colorName, 'Text:', coloredText);
+          console.log(
+            'Color processing - Color:',
+            colorName,
+            'Text:',
+            coloredText,
+          );
 
           // Get actual color value from mapping
-          const colorValue = COLOR_MAP[colorName.toLowerCase()] || '#000000';
-
-          // Create colored text
-          elements.push(
-            <Text
-              key={`color-${index++}`}
-              style={{ color: colorValue }}
-            >
-              {coloredText}
-            </Text>,
-          );
+         if (coloredText.length > 0) {
+  const colorValue = COLOR_MAP[colorName.toLowerCase()] || '#000000';
+  elements.push(
+    <Text key={`color-${index++}`} style={{ color: colorValue }}>
+      {coloredText}
+    </Text>
+  );
+}
         } else if (isHtmlTag && renderText) {
           const rendered = renderText(inner, match);
           if (typeof rendered === 'string') {
@@ -432,7 +434,8 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
       const patterns = [
         // COLOR PATTERN FIRST
         {
-          regex: /:::\s*{\s*\.color-([a-zA-Z]+)\s*}\s*([\s\S]*?)\s*:::/g,
+          // Match lines like ::: {.color-blue}Text:::
+          regex: /^:::\{\.color-([a-zA-Z]+)\}(.*?):::$/g,
           style: ['paragraph'],
           isColor: true,
         },
