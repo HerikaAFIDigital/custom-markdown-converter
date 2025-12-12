@@ -771,7 +771,16 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
         const [full, group1, group2] = match;
         const before = remaining.substring(0, match.index);
         const after = remaining.substring(match.index + full.length);
-        if (before) elements.push(before);
+        
+        if (before) {
+          // Recursively parse the text before the match to ensure correct order
+          const beforeContent = parseInlineMarkdown(before).props.children;
+          if (Array.isArray(beforeContent)) {
+            elements.push(...beforeContent);
+          } else {
+            elements.push(beforeContent);
+          }
+        }
 
         if (options.isLink) {
           // Standard Markdown Link: [text](url) -> group1=text, group2=url
@@ -806,16 +815,17 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
     while (remaining.length) {
       const patterns = [
         // 1. Custom Color Tag with Nested Parsing Support (Highest Priority)
-        // match[1] = Color value (e.g., "#007AFF" or "red")
-        // match[2] = Text content (e.g., "Hello **World**")
+        // match[1] = Quote
+        // match[2] = Color value (e.g., "#007AFF" or "red")
+        // match[3] = Text content (e.g., "Hello **World**")
         {
-          regex: /<color\s+style="([^"]+)">([\s\S]*?)<\/color>/i,
+          regex: /<color\s+style\s*=\s*(["'])(.*?)\1\s*>([\s\S]*?)<\/color>/i,
           style: 'paragraph',
           options: {
             isHtmlTag: true,
             renderText: (_: string, match?: RegExpExecArray) => {
-              const colorAttribute = match ? match[1] : 'black';
-              const textContent = match ? match[2] : '';
+              const colorAttribute = match ? match[2] : 'black';
+              const textContent = match ? match[3] : '';
               
               const colorValue = COLOR_MAP[colorAttribute.toLowerCase()] || colorAttribute;
 
