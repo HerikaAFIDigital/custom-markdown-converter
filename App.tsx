@@ -7,6 +7,8 @@ const sampleMarkdown = `
 
 This is a **bold** text, and this is _italic_ text.
 
+Here is some <color style="red">red text</color> and <color style="blue">**bold blue text**</color>.
+
 > This is a blockquote.
 
 - Item 1
