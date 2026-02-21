@@ -7,8 +7,8 @@ type CustomMarkdownProps = {
     resolveImageSource?: (path: string) => any;
 };
 declare const CustomMarkdown: React.FC<CustomMarkdownProps>;
-export default CustomMarkdown;
 declare const defaultStyles: {
+    container: {};
     paragraph: {
         fontSize: number;
         lineHeight: number;
@@ -102,4 +102,5 @@ declare const defaultStyles: {
         marginVertical: number;
     };
 };
+export default CustomMarkdown;
 //# sourceMappingURL=CustomMarkdown.d.ts.map
