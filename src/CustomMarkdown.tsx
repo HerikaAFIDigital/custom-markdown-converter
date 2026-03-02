@@ -961,7 +961,7 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
     return <Text key={`inline-wrapper-${localIndex++}`}>{elements}</Text>;
   };
 
-  /** NEW: Parse table rows and cells */
+  /** Parse table rows and cells - FIXED for tables with empty first cell */
   const parseTable = (lines: string[], startIndex: number): { element: JSX.Element | null, nextIndex: number } => {
     const tableLines: string[] = [];
     let i = startIndex;
@@ -969,7 +969,7 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
     // Collect all table lines (until empty line or end)
     while (i < lines.length && lines[i].trim() !== '') {
       if (lines[i].trim().startsWith('|')) {
-        tableLines.push(lines[i].trim());
+        tableLines.push(lines[i]);
       }
       i++;
     }
@@ -978,26 +978,47 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
       return { element: null, nextIndex: startIndex };
     }
 
-    // Parse header (first row)
+    // Parse header row - KEEP all cells including empty ones
     const headerRow = tableLines[0];
-    const headerCells = headerRow.split('|').filter(cell => cell.trim() !== '').map(cell => cell.trim());
+    let headerCells = headerRow.split('|').map(cell => cell.trim());
+    // Remove the first empty cell if it exists (before first pipe) and last empty cell (after last pipe)
+    if (headerCells.length > 0 && headerCells[0] === '') {
+      headerCells.shift();
+    }
+    if (headerCells.length > 0 && headerCells[headerCells.length - 1] === '') {
+      headerCells.pop();
+    }
     
-    // Parse alignment row (second row)
+    // Parse alignment row - KEEP all cells
     const alignmentRow = tableLines[1];
-    const alignments = alignmentRow.split('|')
-      .filter(cell => cell.trim() !== '')
-      .map(cell => {
-        const trimmed = cell.trim();
-        if (trimmed.startsWith(':') && trimmed.endsWith(':')) return 'center';
-        if (trimmed.endsWith(':')) return 'right';
-        return 'left';
-      });
+    let alignmentCells = alignmentRow.split('|').map(cell => cell.trim());
+    // Remove first and last empty cells
+    if (alignmentCells.length > 0 && alignmentCells[0] === '') {
+      alignmentCells.shift();
+    }
+    if (alignmentCells.length > 0 && alignmentCells[alignmentCells.length - 1] === '') {
+      alignmentCells.pop();
+    }
+    
+    const alignments = alignmentCells.map(cell => {
+      const trimmed = cell;
+      if (trimmed.startsWith(':') && trimmed.endsWith(':')) return 'center';
+      if (trimmed.endsWith(':')) return 'right';
+      if (trimmed.startsWith(':')) return 'left';
+      return 'left';
+    });
 
-    // Parse data rows
+    // Parse data rows - KEEP all cells
     const dataRows = tableLines.slice(2).map(row => {
-      return row.split('|')
-        .filter(cell => cell.trim() !== '')
-        .map(cell => cell.trim());
+      let cells = row.split('|').map(cell => cell.trim());
+      // Remove first and last empty cells
+      if (cells.length > 0 && cells[0] === '') {
+        cells.shift();
+      }
+      if (cells.length > 0 && cells[cells.length - 1] === '') {
+        cells.pop();
+      }
+      return cells;
     });
 
     // Render table
@@ -1059,11 +1080,10 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
     let codeBlockContent: string[] = [];
     let blockIndex = 0;
 
-    // Change from forEach to for loop to handle table parsing
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       
-      // Handle code blocks (unchanged from your original)
+      // Handle code blocks
       if (line.trim() === '```') {
         inCodeBlock = !inCodeBlock;
         if (!inCodeBlock) {
@@ -1082,7 +1102,7 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
         continue;
       }
 
-      // NEW: Handle tables - Check if line starts with |
+      // Handle tables - Check if line starts with |
       if (line.trim().startsWith('|')) {
         const { element, nextIndex } = parseTable(lines, i);
         if (element) {
@@ -1092,7 +1112,7 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
         }
       }
 
-      // Handle paragraph (exactly as your original)
+      // Handle paragraph
       if (line.trim()) {
         result.push(
           <Text key={`text-${blockIndex++}`} style={getMergedStyle('paragraph')}>
@@ -1148,7 +1168,7 @@ const defaultStyles = StyleSheet.create({
     resizeMode: 'contain',
     marginVertical: 10,
   },
-  // NEW: Table styles
+  // Table styles
   table: {
     marginVertical: 10,
     borderWidth: 1,
