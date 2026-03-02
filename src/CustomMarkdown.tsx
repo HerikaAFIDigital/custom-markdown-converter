@@ -801,7 +801,7 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
     return [defaultStyles[key], styles[key]];
   };
 
-  /** Parses inline markdown */
+  /** Parses inline markdown (Your original logic preserved) */
   const parseInlineMarkdown = (text: string): JSX.Element => {
     const elements: (JSX.Element | string)[] = [];
     let remaining = text;
@@ -882,6 +882,7 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
           },
         },
         { regex: /\*\*\*(.*?)\*\*\*/g, style: 'bold', options: {} },
+        { regex: /\*\*\*(.*?)\*\*\*/g, style: 'bold', options: {} },
         { regex: /\*\*(.*?)\*\*/g, style: 'bold', options: {} },
         { regex: /_(.*?)_/g, style: 'italic', options: {} },
         { regex: /`([^`]+)`/g, style: 'code', options: {} },
@@ -943,27 +944,25 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
     return <Text key={`inline-wrapper-${localIndex++}`}>{elements}</Text>;
   };
 
-  /** New Helper to render the table UI */
-  const renderTable = (rows: string[][], tableIdx: number) => {
-    return (
-      <View key={`table-${tableIdx}`} style={getMergedStyle('tableContainer')}>
-        {rows.map((row, rowIndex) => (
-          <View 
-            key={`row-${rowIndex}`} 
-            style={[getMergedStyle('tableRow'), rowIndex === 0 && getMergedStyle('tableHeaderRow')]}
-          >
-            {row.map((cell, cellIndex) => (
-              <View key={`cell-${cellIndex}`} style={getMergedStyle('tableCell')}>
-                <Text style={rowIndex === 0 ? getMergedStyle('bold') : {}}>
-                  {parseInlineMarkdown(cell)}
-                </Text>
-              </View>
-            ))}
-          </View>
-        ))}
-      </View>
-    );
-  };
+  /** Internal Table Component */
+  const renderTable = (rows: string[][], tableIdx: number) => (
+    <View key={`table-${tableIdx}`} style={getMergedStyle('tableContainer')}>
+      {rows.map((row, rowIndex) => (
+        <View 
+          key={`row-${rowIndex}`} 
+          style={[getMergedStyle('tableRow'), rowIndex === 0 && getMergedStyle('tableHeaderRow')]}
+        >
+          {row.map((cell, cellIndex) => (
+            <View key={`cell-${cellIndex}`} style={getMergedStyle('tableCell')}>
+              <Text style={rowIndex === 0 ? getMergedStyle('bold') : {}}>
+                {parseInlineMarkdown(cell)}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
 
   /** Parses block-level markdown lines */
   const renderMarkdown = () => {
@@ -971,11 +970,11 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
     const result: JSX.Element[] = [];
     let inCodeBlock = false;
     let codeBlockContent: string[] = [];
-    
-    // Table states
+    let blockIndex = 0;
+
+    // Table Tracking
     let currentTableRows: string[][] = [];
     let isInsideTable = false;
-    let blockIndex = 0;
 
     const flushTable = () => {
       if (currentTableRows.length > 0) {
@@ -986,10 +985,10 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
     };
 
     lines.forEach((line) => {
-      const trimmedLine = line.trim();
+      const trimmed = line.trim();
 
-      // 1. Handle code blocks
-      if (trimmedLine === '```') {
+      // 1. Code Blocks (Original)
+      if (trimmed === '```') {
         flushTable();
         inCodeBlock = !inCodeBlock;
         if (!inCodeBlock) {
@@ -1007,65 +1006,45 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
         return;
       }
 
-      // 2. Handle Table Rows (Lines starting with |)
-      if (trimmedLine.startsWith('|')) {
+      // 2. Table Rows
+      if (trimmed.startsWith('|')) {
         isInsideTable = true;
-        // Detect and skip the |---| separator line
-        const isSeparator = /^\|?[\s?[:-]{3,}/.test(trimmedLine);
+        // Skip separator rows like |---|
+        const isSeparator = /^\|?[\s?[:-]{3,}/.test(trimmed);
         if (!isSeparator) {
           const cells = line
             .split('|')
-            .filter((_, i, arr) => i > 0 && i < arr.length - 1)
+            .filter((_, idx, arr) => idx > 0 && idx < arr.length - 1)
             .map(c => c.trim());
-          
           if (cells.length > 0) currentTableRows.push(cells);
         }
         return;
       } else if (isInsideTable) {
-        // If the line doesn't start with |, the table has ended
         flushTable();
       }
 
-      // 3. Handle paragraph and headers (Existing Logic)
-      if (trimmedLine) {
-        if (trimmedLine.startsWith('#')) {
-            const level = (trimmedLine.match(/^#+/) || ['#'])[0].length;
-            const text = trimmedLine.replace(/^#+\s*/, '');
-            const styleKey = `heading${level}` as keyof typeof defaultStyles;
-            result.push(
-                <Text key={`heading-${blockIndex++}`} style={getMergedStyle(styleKey)}>
-                    {parseInlineMarkdown(text)}
-                </Text>
-            );
-        } else {
-            result.push(
-              <Text key={`text-${blockIndex++}`} style={getMergedStyle('paragraph')}>
-                {parseInlineMarkdown(line)}
-              </Text>,
-            );
-        }
+      // 3. Paragraphs/Empty Lines (Original)
+      if (line.trim()) {
+        result.push(
+          <Text key={`text-${blockIndex++}`} style={getMergedStyle('paragraph')}>
+            {parseInlineMarkdown(line)}
+          </Text>,
+        );
       } else {
         result.push(<Text key={`spacer-${blockIndex++}`}>{'\n'}</Text>);
       }
     });
 
-    flushTable(); // Ensure table renders if it's the last thing in the content
+    flushTable();
     return result;
   };
 
   return <View style={getMergedStyle('container')}>{renderMarkdown()}</View>;
 };
 
-// --- Default Styles ---
 const defaultStyles = StyleSheet.create({
   container: {},
   paragraph: { fontSize: 16, lineHeight: 24, color: '#333', marginBottom: 8 },
-  heading1: { fontSize: 24, fontWeight: 'bold', marginVertical: 10 },
-  heading2: { fontSize: 22, fontWeight: 'bold', marginVertical: 8 },
-  heading3: { fontSize: 20, fontWeight: 'bold', marginVertical: 6 },
-  heading4: { fontSize: 18, fontWeight: 'bold', marginVertical: 4 },
-  heading5: { fontSize: 16, fontWeight: 'bold', marginVertical: 4 },
-  heading6: { fontSize: 14, fontWeight: 'bold', marginVertical: 2 },
   bold: { fontWeight: 'bold' },
   italic: { fontStyle: 'italic' },
   underline: { textDecorationLine: 'underline' },
@@ -1077,7 +1056,7 @@ const defaultStyles = StyleSheet.create({
     marginVertical: 10,
   },
   link: { color: '#007AFF', textDecorationLine: 'underline' },
-  // Table Styling
+  // Table Styles
   tableContainer: {
     borderWidth: 1,
     borderColor: '#ccc',
