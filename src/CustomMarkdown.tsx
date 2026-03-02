@@ -758,7 +758,6 @@ import React, { JSX } from 'react';
 import {
   Text,
   View,
-  Image,
   StyleSheet,
   Linking,
   StyleProp,
@@ -776,7 +775,6 @@ type CustomMarkdownProps = {
   resolveImageSource?: (path: string) => any;
 };
 
-// Optional color map (Kept for convenience, allowing names like 'red')
 const COLOR_MAP: Record<string, string> = {
   blue: '#007AFF',
   red: '#FF3B30',
@@ -797,18 +795,16 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
   styles = {},
   resolveImageSource,
 }) => {
-  // We need to keep a consistent index for key generation across recursive calls
   let globalIndex = 0;
- 
+
   const getMergedStyle = (key: keyof typeof defaultStyles): MarkdownStyle => {
     return [defaultStyles[key], styles[key]];
   };
 
-  /** Parses inline markdown and supports <color style="#xxxxxx">text</color> */
+  /** Parses inline markdown */
   const parseInlineMarkdown = (text: string): JSX.Element => {
     const elements: (JSX.Element | string)[] = [];
     let remaining = text;
-    // local index is used for array iteration, globalIndex for unique React keys
     let localIndex = 0;
 
     const applyRegex = (
@@ -821,18 +817,15 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
         renderText?: (value: string, match?: RegExpExecArray) => string | JSX.Element;
       } = {},
     ) => {
-      // Ensure the regex is not global or reset its index if it is
       regex.lastIndex = 0;
       const match = regex.exec(remaining);
-     
+
       if (match) {
-        // group1 is the first captured group, group2 is the second (if present)
         const [full, group1, group2] = match;
         const before = remaining.substring(0, match.index);
         const after = remaining.substring(match.index + full.length);
-       
+
         if (before) {
-          // Recursively parse the text before the match to ensure correct order
           const beforeContent = parseInlineMarkdown(before).props.children;
           if (Array.isArray(beforeContent)) {
             elements.push(...beforeContent);
@@ -842,7 +835,6 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
         }
 
         if (options.isLink) {
-          // Standard Markdown Link: [text](url) -> group1=text, group2=url
           elements.push(
             <Text
               key={`link-${globalIndex++}`}
@@ -853,11 +845,9 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
             </Text>,
           );
         } else if (options.isHtmlTag && options.renderText) {
-          // Custom HTML Tags (like <color>, <b>, <br/>)
           const rendered = options.renderText(group1, match);
           elements.push(rendered);
         } else {
-          // Standard Markdown (Bold, Italic, Code) -> group1=content
           elements.push(
             <Text key={`styled-${globalIndex++}`} style={getMergedStyle(styleKey)}>
               {group1}
@@ -873,7 +863,6 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
 
     while (remaining.length) {
       const patterns = [
-        // 1. Custom Color Tag with Nested Parsing Support (Highest Priority)
         {
           regex: /<color\s+style\s*=\s*(["'])(.*?)\1\s*>([\s\S]*?)<\/color>/i,
           style: 'paragraph',
@@ -882,12 +871,8 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
             renderText: (_: string, match?: RegExpExecArray) => {
               const colorAttribute = match ? match[2] : 'black';
               const textContent = match ? match[3] : '';
-             
               const colorValue = COLOR_MAP[colorAttribute.toLowerCase()] || colorAttribute;
-
-              // Recursive call: Correctly parse content and extract its children
               const nestedResult = parseInlineMarkdown(textContent).props.children;
-             
               return (
                 <Text key={`color-${globalIndex++}`} style={{ color: colorValue }}>
                   {nestedResult}
@@ -896,14 +881,11 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
             },
           },
         },
-        // 2. Strong/Emphasis Markdown
         { regex: /\*\*\*(.*?)\*\*\*/g, style: 'bold', options: {} },
         { regex: /\*\*(.*?)\*\*/g, style: 'bold', options: {} },
         { regex: /_(.*?)_/g, style: 'italic', options: {} },
-        // 3. Code and Links
         { regex: /`([^`]+)`/g, style: 'code', options: {} },
         { regex: /\[(.*?)\]\((.*?)\)/g, style: 'link', options: { isLink: true } },
-        // 4. Other HTML Tags
         {
           regex: /<b>(.*?)<\/b>/i,
           style: 'bold',
@@ -957,109 +939,22 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
         break;
       }
     }
-   
+
     return <Text key={`inline-wrapper-${localIndex++}`}>{elements}</Text>;
   };
 
-  /** Parse table rows and cells - FIXED for tables with empty first cell */
-  const parseTable = (lines: string[], startIndex: number): { element: JSX.Element | null, nextIndex: number } => {
-    const tableLines: string[] = [];
-    let i = startIndex;
-    
-    // Collect all table lines (until empty line or end)
-    while (i < lines.length && lines[i].trim() !== '') {
-      if (lines[i].trim().startsWith('|')) {
-        tableLines.push(lines[i]);
-      }
-      i++;
-    }
-
-    if (tableLines.length < 3) {
-      return { element: null, nextIndex: startIndex };
-    }
-
-    // Parse header row - KEEP all cells including empty ones
-    const headerRow = tableLines[0];
-    let headerCells = headerRow.split('|').map(cell => cell.trim());
-    // Remove the first empty cell if it exists (before first pipe) and last empty cell (after last pipe)
-    if (headerCells.length > 0 && headerCells[0] === '') {
-      headerCells.shift();
-    }
-    if (headerCells.length > 0 && headerCells[headerCells.length - 1] === '') {
-      headerCells.pop();
-    }
-    
-    // Parse alignment row - KEEP all cells
-    const alignmentRow = tableLines[1];
-    let alignmentCells = alignmentRow.split('|').map(cell => cell.trim());
-    // Remove first and last empty cells
-    if (alignmentCells.length > 0 && alignmentCells[0] === '') {
-      alignmentCells.shift();
-    }
-    if (alignmentCells.length > 0 && alignmentCells[alignmentCells.length - 1] === '') {
-      alignmentCells.pop();
-    }
-    
-    const alignments = alignmentCells.map(cell => {
-      const trimmed = cell;
-      if (trimmed.startsWith(':') && trimmed.endsWith(':')) return 'center';
-      if (trimmed.endsWith(':')) return 'right';
-      if (trimmed.startsWith(':')) return 'left';
-      return 'left';
-    });
-
-    // Parse data rows - KEEP all cells
-    const dataRows = tableLines.slice(2).map(row => {
-      let cells = row.split('|').map(cell => cell.trim());
-      // Remove first and last empty cells
-      if (cells.length > 0 && cells[0] === '') {
-        cells.shift();
-      }
-      if (cells.length > 0 && cells[cells.length - 1] === '') {
-        cells.pop();
-      }
-      return cells;
-    });
-
-    // Render table
-    const tableElement = (
-      <View key={`table-${globalIndex++}`} style={getMergedStyle('table')}>
-        {/* Header Row */}
-        <View style={[getMergedStyle('tableRow'), getMergedStyle('tableHeaderRow')]}>
-          {headerCells.map((cell, index) => (
-            <View 
-              key={`th-${index}`} 
-              style={[
-                getMergedStyle('tableCell'), 
-                getMergedStyle('tableHeaderCell'),
-              ]}
-            >
-              <Text 
-                style={[
-                  getMergedStyle('tableHeaderText'),
-                  { textAlign: alignments[index] || 'left' }
-                ]}
-              >
-                {parseInlineMarkdown(cell)}
-              </Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Data Rows */}
-        {dataRows.map((row, rowIndex) => (
-          <View key={`tr-${rowIndex}`} style={getMergedStyle('tableRow')}>
+  /** New Helper to render the table UI */
+  const renderTable = (rows: string[][], tableIdx: number) => {
+    return (
+      <View key={`table-${tableIdx}`} style={getMergedStyle('tableContainer')}>
+        {rows.map((row, rowIndex) => (
+          <View 
+            key={`row-${rowIndex}`} 
+            style={[getMergedStyle('tableRow'), rowIndex === 0 && getMergedStyle('tableHeaderRow')]}
+          >
             {row.map((cell, cellIndex) => (
-              <View 
-                key={`td-${rowIndex}-${cellIndex}`} 
-                style={getMergedStyle('tableCell')}
-              >
-                <Text 
-                  style={[
-                    getMergedStyle('tableCellText'),
-                    { textAlign: alignments[cellIndex] || 'left' }
-                  ]}
-                >
+              <View key={`cell-${cellIndex}`} style={getMergedStyle('tableCell')}>
+                <Text style={rowIndex === 0 ? getMergedStyle('bold') : {}}>
                   {parseInlineMarkdown(cell)}
                 </Text>
               </View>
@@ -1068,8 +963,6 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
         ))}
       </View>
     );
-
-    return { element: tableElement, nextIndex: i };
   };
 
   /** Parses block-level markdown lines */
@@ -1078,13 +971,26 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
     const result: JSX.Element[] = [];
     let inCodeBlock = false;
     let codeBlockContent: string[] = [];
+    
+    // Table states
+    let currentTableRows: string[][] = [];
+    let isInsideTable = false;
     let blockIndex = 0;
 
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      
-      // Handle code blocks
-      if (line.trim() === '```') {
+    const flushTable = () => {
+      if (currentTableRows.length > 0) {
+        result.push(renderTable(currentTableRows, blockIndex++));
+        currentTableRows = [];
+        isInsideTable = false;
+      }
+    };
+
+    lines.forEach((line) => {
+      const trimmedLine = line.trim();
+
+      // 1. Handle code blocks
+      if (trimmedLine === '```') {
+        flushTable();
         inCodeBlock = !inCodeBlock;
         if (!inCodeBlock) {
           result.push(
@@ -1094,37 +1000,56 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
           );
           codeBlockContent = [];
         }
-        continue;
+        return;
       }
-      
       if (inCodeBlock) {
         codeBlockContent.push(line);
-        continue;
+        return;
       }
 
-      // Handle tables - Check if line starts with |
-      if (line.trim().startsWith('|')) {
-        const { element, nextIndex } = parseTable(lines, i);
-        if (element) {
-          result.push(element);
-          i = nextIndex - 1; // Skip the lines we just processed
-          continue;
+      // 2. Handle Table Rows (Lines starting with |)
+      if (trimmedLine.startsWith('|')) {
+        isInsideTable = true;
+        // Detect and skip the |---| separator line
+        const isSeparator = /^\|?[\s?[:-]{3,}/.test(trimmedLine);
+        if (!isSeparator) {
+          const cells = line
+            .split('|')
+            .filter((_, i, arr) => i > 0 && i < arr.length - 1)
+            .map(c => c.trim());
+          
+          if (cells.length > 0) currentTableRows.push(cells);
         }
+        return;
+      } else if (isInsideTable) {
+        // If the line doesn't start with |, the table has ended
+        flushTable();
       }
 
-      // Handle paragraph
-      if (line.trim()) {
-        result.push(
-          <Text key={`text-${blockIndex++}`} style={getMergedStyle('paragraph')}>
-            {parseInlineMarkdown(line)}
-          </Text>,
-        );
+      // 3. Handle paragraph and headers (Existing Logic)
+      if (trimmedLine) {
+        if (trimmedLine.startsWith('#')) {
+            const level = (trimmedLine.match(/^#+/) || ['#'])[0].length;
+            const text = trimmedLine.replace(/^#+\s*/, '');
+            const styleKey = `heading${level}` as keyof typeof defaultStyles;
+            result.push(
+                <Text key={`heading-${blockIndex++}`} style={getMergedStyle(styleKey)}>
+                    {parseInlineMarkdown(text)}
+                </Text>
+            );
+        } else {
+            result.push(
+              <Text key={`text-${blockIndex++}`} style={getMergedStyle('paragraph')}>
+                {parseInlineMarkdown(line)}
+              </Text>,
+            );
+        }
       } else {
-        // Handle empty lines for spacing
         result.push(<Text key={`spacer-${blockIndex++}`}>{'\n'}</Text>);
       }
-    }
+    });
 
+    flushTable(); // Ensure table renders if it's the last thing in the content
     return result;
   };
 
@@ -1151,54 +1076,28 @@ const defaultStyles = StyleSheet.create({
     borderRadius: 6,
     marginVertical: 10,
   },
-  blockquoteContainer: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#ccc',
-    paddingLeft: 10,
-    marginVertical: 8,
-  },
-  blockquoteText: { fontStyle: 'italic', color: '#666' },
-  bulletRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 },
-  bullet: { fontSize: 16, lineHeight: 24, marginRight: 6, fontWeight: 'bold' },
-  listText: { flex: 1, fontSize: 16, lineHeight: 24 },
   link: { color: '#007AFF', textDecorationLine: 'underline' },
-  image: {
-    width: '100%',
-    height: 200,
-    resizeMode: 'contain',
-    marginVertical: 10,
-  },
-  // Table styles
-  table: {
-    marginVertical: 10,
+  // Table Styling
+  tableContainer: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#ccc',
+    marginVertical: 10,
     borderRadius: 4,
     overflow: 'hidden',
   },
   tableRow: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    borderBottomColor: '#ccc',
   },
   tableHeaderRow: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f9f9f9',
   },
   tableCell: {
     flex: 1,
-    padding: 10,
+    padding: 8,
     borderRightWidth: 1,
-    borderRightColor: '#ddd',
-  },
-  tableHeaderCell: {
-    backgroundColor: '#f0f0f0',
-  },
-  tableHeaderText: {
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  tableCellText: {
-    fontSize: 15,
+    borderRightColor: '#ccc',
   },
 });
 
