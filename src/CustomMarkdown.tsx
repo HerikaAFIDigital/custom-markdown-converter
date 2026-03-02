@@ -768,17 +768,14 @@ import {
   ImageStyle,
 } from 'react-native';
 
-
 // --- Types ---
 type MarkdownStyle = StyleProp<TextStyle | ViewStyle | ImageStyle>;
-
 
 type CustomMarkdownProps = {
   content: string;
   styles?: Partial<Record<keyof typeof defaultStyles, MarkdownStyle>>;
   resolveImageSource?: (path: string) => any;
 };
-
 
 // Optional color map (Kept for convenience, allowing names like 'red')
 const COLOR_MAP: Record<string, string> = {
@@ -795,7 +792,6 @@ const COLOR_MAP: Record<string, string> = {
   gray: '#8E8E93',
 };
 
-
 // --- Component ---
 const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
   content,
@@ -809,14 +805,12 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
     return [defaultStyles[key], styles[key]];
   };
 
-
   /** Parses inline markdown and supports <color style="#xxxxxx">text</color> */
   const parseInlineMarkdown = (text: string): JSX.Element => {
     const elements: (JSX.Element | string)[] = [];
     let remaining = text;
     // local index is used for array iteration, globalIndex for unique React keys
     let localIndex = 0;
-
 
     const applyRegex = (
       regex: RegExp,
@@ -848,7 +842,6 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
           }
         }
 
-
         if (options.isLink) {
           // Standard Markdown Link: [text](url) -> group1=text, group2=url
           elements.push(
@@ -873,13 +866,11 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
           );
         }
 
-
         remaining = after;
         return true;
       }
       return false;
     };
-
 
     while (remaining.length) {
       const patterns = [
@@ -897,7 +888,6 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
               const textContent = match ? match[3] : '';
              
               const colorValue = COLOR_MAP[colorAttribute.toLowerCase()] || colorAttribute;
-
 
               // Recursive call: Correctly parse content and extract its children
               const nestedResult = parseInlineMarkdown(textContent).props.children;
@@ -958,7 +948,6 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
         },
       ];
 
-
       let matched = false;
       for (const pattern of patterns) {
         if (applyRegex(pattern.regex, pattern.style as keyof typeof defaultStyles, pattern.options)) {
@@ -966,7 +955,6 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
           break;
         }
       }
-
 
       if (!matched) {
         elements.push(remaining);
@@ -978,6 +966,90 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
     return <Text key={`inline-wrapper-${localIndex++}`}>{elements}</Text>;
   };
 
+  /** Parse table rows and cells */
+  const parseTable = (lines: string[], startIndex: number): { element: JSX.Element, nextIndex: number } => {
+    const tableLines: string[] = [];
+    let i = startIndex;
+    
+    // Collect all table lines (until empty line or end)
+    while (i < lines.length && lines[i].trim() !== '') {
+      if (lines[i].trim().startsWith('|')) {
+        tableLines.push(lines[i].trim());
+      }
+      i++;
+    }
+
+    if (tableLines.length < 3) {
+      return { element: <></>, nextIndex: startIndex };
+    }
+
+    // Parse header (first row)
+    const headerRow = tableLines[0];
+    const headerCells = headerRow.split('|').filter(cell => cell.trim() !== '').map(cell => cell.trim());
+    
+    // Parse alignment row (second row)
+    const alignmentRow = tableLines[1];
+    const alignments = alignmentRow.split('|')
+      .filter(cell => cell.trim() !== '')
+      .map(cell => {
+        const trimmed = cell.trim();
+        if (trimmed.startsWith(':') && trimmed.endsWith(':')) return 'center';
+        if (trimmed.endsWith(':')) return 'right';
+        if (trimmed.startsWith(':')) return 'left';
+        return 'left';
+      });
+
+    // Parse data rows
+    const dataRows = tableLines.slice(2).map(row => {
+      return row.split('|')
+        .filter(cell => cell.trim() !== '')
+        .map(cell => cell.trim());
+    });
+
+    // Render table
+    const tableElement = (
+      <View key={`table-${globalIndex++}`} style={getMergedStyle('table')}>
+        {/* Header Row */}
+        <View style={[getMergedStyle('tableRow'), getMergedStyle('tableHeaderRow')]}>
+          {headerCells.map((cell, index) => (
+            <View 
+              key={`th-${index}`} 
+              style={[
+                getMergedStyle('tableCell'), 
+                getMergedStyle('tableHeaderCell'),
+                { alignItems: alignments[index] === 'center' ? 'center' : alignments[index] === 'right' ? 'flex-end' : 'flex-start' }
+              ]}
+            >
+              <Text style={getMergedStyle('tableHeaderText')}>
+                {parseInlineMarkdown(cell)}
+              </Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Data Rows */}
+        {dataRows.map((row, rowIndex) => (
+          <View key={`tr-${rowIndex}`} style={getMergedStyle('tableRow')}>
+            {row.map((cell, cellIndex) => (
+              <View 
+                key={`td-${rowIndex}-${cellIndex}`} 
+                style={[
+                  getMergedStyle('tableCell'),
+                  { alignItems: alignments[cellIndex] === 'center' ? 'center' : alignments[cellIndex] === 'right' ? 'flex-end' : 'flex-start' }
+                ]}
+              >
+                <Text style={getMergedStyle('tableCellText')}>
+                  {parseInlineMarkdown(cell)}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ))}
+      </View>
+    );
+
+    return { element: tableElement, nextIndex: i };
+  };
 
   /** Parses block-level markdown lines */
   const renderMarkdown = () => {
@@ -987,8 +1059,9 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
     let codeBlockContent: string[] = [];
     let blockIndex = 0; // Use a dedicated index for block-level elements
 
-
-    lines.forEach((line, index) => {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      
       // Handle code blocks
       if (line.trim() === '```') {
         inCodeBlock = !inCodeBlock;
@@ -1000,15 +1073,24 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
           );
           codeBlockContent = [];
         }
-        return;
+        continue;
       }
+      
       if (inCodeBlock) {
         codeBlockContent.push(line);
-        return;
+        continue;
       }
-     
-      // ... (other block-level logic like images, headings, etc. using parseInlineMarkdown) ...
 
+      // Handle tables - Check if line starts with |
+      if (line.trim().startsWith('|')) {
+        const { element, nextIndex } = parseTable(lines, i);
+        // Only add if we got a valid table
+        if (element.props.children) {
+          result.push(element);
+          i = nextIndex - 1; // Skip the lines we just processed
+          continue;
+        }
+      }
 
       // Handle paragraph
       if (line.trim()) {
@@ -1021,16 +1103,13 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
         // Handle empty lines for spacing
         result.push(<Text key={`spacer-${blockIndex++}`}>{'\n'}</Text>);
       }
-    });
-
+    }
 
     return result;
   };
 
-
   return <View style={getMergedStyle('container')}>{renderMarkdown()}</View>;
 };
-
 
 // --- Default Styles (MUST be defined for the component to work) ---
 const defaultStyles = StyleSheet.create({
@@ -1071,8 +1150,38 @@ const defaultStyles = StyleSheet.create({
     resizeMode: 'contain',
     marginVertical: 10,
   },
+  // Table styles - Added these
+  table: {
+    marginVertical: 10,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  tableRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+  },
+  tableHeaderRow: {
+    backgroundColor: '#f5f5f5',
+  },
+  tableCell: {
+    flex: 1,
+    padding: 10,
+    borderRightWidth: 1,
+    borderRightColor: '#ddd',
+  },
+  tableHeaderCell: {
+    backgroundColor: '#f0f0f0',
+  },
+  tableHeaderText: {
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  tableCellText: {
+    fontSize: 15,
+  },
 });
 
-
 export default CustomMarkdown;
-
