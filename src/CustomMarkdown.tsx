@@ -1,4 +1,4 @@
-// import React, { JSX } from 'react';
+​// import React, { JSX } from 'react';
 // import {
 //   Text,
 //   View,
@@ -739,8 +739,8 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
   resolveImageSource,
 }) => {
   // We need to keep a consistent index for key generation across recursive calls
-  let globalIndex = 0; 
-  
+  let globalIndex = 0;
+
   const getMergedStyle = (key: keyof typeof defaultStyles): MarkdownStyle => {
     return [defaultStyles[key], styles[key]];
   };
@@ -763,15 +763,15 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
       } = {},
     ) => {
       // Ensure the regex is not global or reset its index if it is
-      regex.lastIndex = 0; 
+      regex.lastIndex = 0;
       const match = regex.exec(remaining);
-      
+
       if (match) {
         // group1 is the first captured group, group2 is the second (if present)
         const [full, group1, group2] = match;
         const before = remaining.substring(0, match.index);
         const after = remaining.substring(match.index + full.length);
-        
+
         if (before) {
           // Recursively parse the text before the match to ensure correct order
           const beforeContent = parseInlineMarkdown(before).props.children;
@@ -826,12 +826,12 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
             renderText: (_: string, match?: RegExpExecArray) => {
               const colorAttribute = match ? match[2] : 'black';
               const textContent = match ? match[3] : '';
-              
+
               const colorValue = COLOR_MAP[colorAttribute.toLowerCase()] || colorAttribute;
 
               // Recursive call: Correctly parse content and extract its children
               const nestedResult = parseInlineMarkdown(textContent).props.children;
-              
+
               return (
                 <Text key={`color-${globalIndex++}`} style={{ color: colorValue }}>
                   {nestedResult}
@@ -901,7 +901,7 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
         break;
       }
     }
-    
+
     // We use a local index for the final wrapping Text component key
     return <Text key={`inline-wrapper-${localIndex++}`}>{elements}</Text>;
   };
@@ -932,10 +932,96 @@ const CustomMarkdown: React.FC<CustomMarkdownProps> = ({
         codeBlockContent.push(line);
         return;
       }
-      
-      // ... (other block-level logic like images, headings, etc. using parseInlineMarkdown) ...
+      // --- Images ---
+      const imgMatch = line.match(/!\[(.*?)\]\((.*?)\)/);
+      if (imgMatch) {
+        const altText = imgMatch[1];
+        const imgPath = imgMatch[2];
+        const source = resolveImageSource
+          ? resolveImageSource(imgPath)
+          : { uri: imgPath };
 
-      // Handle paragraph
+        result.push(
+          <Image
+            key={`img-${blockIndex++}`}
+            source={source}
+            style={getMergedStyle('image') as StyleProp<ImageStyle>}
+            accessibilityLabel={altText}
+          />,
+        );
+        return;
+      }
+
+      // --- Headings ---
+      const headingMatch = line.match(/^(#{1,6})\s+(.*)/);
+      if (headingMatch) {
+        const level = headingMatch[1].length;
+        const headingText = headingMatch[2];
+        const styleKey = `heading${level}` as keyof typeof defaultStyles;
+        result.push(
+          <Text key={`heading-${blockIndex++}`} style={getMergedStyle(styleKey)}>
+            {parseInlineMarkdown(headingText)}
+          </Text>,
+        );
+        return;
+      }
+
+      // --- Horizontal rule ---
+      if (line.trim() === '---' || line.trim() === '***') {
+        result.push(
+          <View
+            key={`hr-${blockIndex++}`}
+            style={{ borderBottomWidth: 1, borderBottomColor: '#ccc', marginVertical: 12 }}
+          />,
+        );
+        return;
+      }
+
+      // --- Blockquotes ---
+      if (line.startsWith('>')) {
+        result.push(
+          <View
+            key={`quote-${blockIndex++}`}
+            style={getMergedStyle('blockquoteContainer')}
+          >
+            <Text style={getMergedStyle('blockquoteText')}>
+              {parseInlineMarkdown(line.replace(/^>\s?/, ''))}
+            </Text>
+          </View>,
+        );
+        return;
+      }
+
+      // --- Bullet lists ---
+      if (line.trim().startsWith('- ')) {
+        result.push(
+          <View key={`list-${blockIndex++}`} style={getMergedStyle('bulletRow')}>
+            <Text style={getMergedStyle('bullet')}>{'\u2022'}</Text>
+            <Text style={getMergedStyle('listText')}>
+              {parseInlineMarkdown(line.replace(/^\s*-\s/, ''))}
+            </Text>
+          </View>,
+        );
+        return;
+      }
+
+      // --- Ordered lists ---
+      const numberedMatch = line.trim().match(/^(\d+)\.\s+(.*)/);
+      if (numberedMatch) {
+        result.push(
+          <View key={`list-num-${blockIndex++}`} style={getMergedStyle('bulletRow')}>
+            <Text style={getMergedStyle('bullet')}>
+              {numberedMatch[1] + '.'}
+            </Text>
+            <Text style={getMergedStyle('listText')}>
+              {parseInlineMarkdown(numberedMatch[2])}
+            </Text>
+          </View>,
+        );
+        return;
+      }
+
+      // --- Paragraphs (fallback) ---
       if (line.trim()) {
         result.push(
           <Text key={`text-${blockIndex++}`} style={getMergedStyle('paragraph')}>
